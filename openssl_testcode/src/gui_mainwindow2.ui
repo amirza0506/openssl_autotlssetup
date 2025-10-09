@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x><y>0</y><width>640</width><height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>OpenSSL GUI Crypto Platform</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QLabel" name="lblTitle">
+      <property name="text">
+       <string>🧩 OpenSSL Crypto API GUI</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font-weight: bold; font-size: 16pt;</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="buttonLayout">
+      <item><widget class="QPushButton" name="btnGenerate"><property name="text"><string>🔑 Generate</string></property></widget></item>
+      <item><widget class="QPushButton" name="btnSign"><property name="text"><string>🖋 Sign</string></property></widget></item>
+      <item><widget class="QPushButton" name="btnVerify"><property name="text"><string>🔍 Verify</string></property></widget></item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QPlainTextEdit" name="txtOutput">
+      <property name="readOnly"><bool>true</bool></property>
+      <property name="placeholderText">
+       <string>Output and log messages will appear here...</string>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font-family: monospace; background-color: #f4f4f4;</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar"/>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,76 @@
+# ==============================
+# 🧩 Compiler and Flags
+# ==============================
+CC      = gcc
+CXX     = g++
+CFLAGS  = -Wall -O2 -fPIC
+QTFLAGS = -fPIC
+LIBS    = -lcrypto -lssl -lQt6Widgets -lQt6Core -lQt6Gui
+INCLUDES = -I/usr/include/qt6 \
+           -I/usr/include/qt6/QtWidgets \
+           -I/usr/include/qt6/QtCore \
+           -I/usr/include/qt6/QtGui \
+           -Isrc
+
+# ==============================
+# 🧩 Paths
+# ==============================
+SRC_DIR   = src
+BUILD_DIR = build
+LIB_DIR   = lib
+TARGET_LIB = $(LIB_DIR)/libcryptoapi.so
+TARGET_GUI = $(BUILD_DIR)/crypto_gui
+
+# ==============================
+# 🧩 Sources
+# ==============================
+LIB_SRC  = $(SRC_DIR)/crypto_api.c
+LIB_HDR  = $(SRC_DIR)/crypto_api.h
+
+UI_SRC   = $(SRC_DIR)/gui_mainwindow.ui
+UI_HDR   = $(BUILD_DIR)/ui_mainwindow.h
+
+GUI_SRC  = $(SRC_DIR)/gui_main.cpp $(SRC_DIR)/gui_mainwindow.cpp
+GUI_OBJ  = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(GUI_SRC))
+
+# ==============================
+# 🧩 Default Target
+# ==============================
+all: $(TARGET_LIB) $(UI_HDR) $(TARGET_GUI)
+
+# ==============================
+# 🔧 Build Shared Library (.so)
+# ==============================
+$(TARGET_LIB): $(LIB_SRC) $(LIB_HDR)
+	@mkdir -p $(LIB_DIR) $(BUILD_DIR)
+	$(CC) $(CFLAGS) -shared -o $@ $< -lcrypto -lssl
+	@echo "[✔] Built shared library: $@"
+
+# ==============================
+# 🧩 Qt UI Compiler Step (.ui → .h)
+# ==============================
+$(UI_HDR): $(UI_SRC)
+	@mkdir -p $(BUILD_DIR)
+	uic $< -o $@
+	@echo "[✔] Processed Qt UI: $< → $@"
+
+# ==============================
+# 🧩 Build GUI Application
+# ==============================
+$(TARGET_GUI): $(GUI_SRC) $(UI_HDR) $(TARGET_LIB)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(QTFLAGS) -o $@ $(GUI_SRC) $(INCLUDES) $(LIBS) -L$(LIB_DIR) -lcryptoapi
+	@echo "[✔] Built GUI app: $@"
+
+# ==============================
+# 🧹 Clean
+# ==============================
+clean:
+	rm -rf $(BUILD_DIR) $(LIB_DIR)
+	@echo "[✖] Cleaned build and lib directories."
+
+# ==============================
+# ▶️ Run GUI
+# ==============================
+run: all
+	./$(TAR

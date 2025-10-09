@@ -1,0 +1,67 @@
+# ==========================================================
+# OpenSSL + Qt6 Crypto Test Platform
+# Auto-detects Qt6 paths with pkg-config
+# ==========================================================
+
+# Compiler and flags
+CC      = gcc
+CXX     = g++
+CFLAGS  = -Wall -O2 -fPIC
+LDFLAGS = -shared
+
+# OpenSSL libraries
+LIBS    = -lcrypto -lssl
+
+# Use pkg-config to detect Qt6 include and lib paths
+QT_CFLAGS  := $(shell pkg-config --cflags Qt6Widgets Qt6Core Qt6Gui)
+QT_LIBS    := $(shell pkg-config --libs Qt6Widgets Qt6Core Qt6Gui)
+
+# Directories
+SRC_DIR   = src
+BUILD_DIR = build
+LIB_DIR   = lib
+
+# Targets
+LIB_TARGET = $(LIB_DIR)/libcryptoapi.so
+GUI_TARGET = $(BUILD_DIR)/crypto_gui
+
+# ==========================================================
+# Default target
+# ==========================================================
+all: $(LIB_TARGET) $(GUI_TARGET)
+	@echo "[✔] All build steps completed successfully."
+
+# ==========================================================
+# Build shared library (OpenSSL 3.5)
+# ==========================================================
+$(LIB_TARGET): $(SRC_DIR)/crypto_api.c
+	@mkdir -p $(LIB_DIR) $(BUILD_DIR)
+	@echo "[⏳] Building shared library..."
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
+	@echo "[✔] Built shared library: $@"
+
+# ==========================================================
+# Build GUI (Qt6)
+# ==========================================================
+$(GUI_TARGET): $(SRC_DIR)/gui_main.cpp $(SRC_DIR)/gui_mainwindow.cpp $(LIB_TARGET)
+	@mkdir -p $(BUILD_DIR)
+	@echo "[⏳] Compiling Qt6 GUI..."
+	@uic $(SRC_DIR)/gui_mainwindow.ui -o $(BUILD_DIR)/ui_mainwindow.h
+	@echo "[✔] Processed UI file."
+	$(CXX) -fPIC -o $@ $(SRC_DIR)/gui_main.cpp $(SRC_DIR)/gui_mainwindow.cpp \
+		$(QT_CFLAGS) -Isrc -I$(BUILD_DIR) $(LIBS) $(QT_LIBS) -L$(LIB_DIR) -lcryptoapi
+	@echo "[✔] Built GUI application: $@"
+
+# ==========================================================
+# Run GUI
+# ==========================================================
+run: all
+	@echo "[🚀] Running Crypto GUI..."
+	@./$(GUI_TARGET)
+
+# ==========================================================
+# Clean build files
+# ==========================================================
+clean:
+	@rm -rf $(BUILD_DIR) $(LIB_DIR)
+	@echo "[🧹] Cleaned all build artifacts."

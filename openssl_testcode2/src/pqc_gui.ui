@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PQC_GUI</class>
+ <widget class="QWidget" name="PQC_GUI">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>PQC Certificate Automation</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+
+   <!-- Title -->
+   <item>
+    <widget class="QLabel" name="label_title">
+     <property name="text">
+      <string>🧠 Post-Quantum Cryptography Toolkit</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18px; font-weight: bold; color: #00bfa5;</string>
+     </property>
+    </widget>
+   </item>
+
+   <!-- Role Selection -->
+   <item>
+    <widget class="QGroupBox" name="group_role">
+     <property name="title">
+      <string>Step 1: Select Role</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_role">
+      <item>
+       <widget class="QPushButton" name="btn_ca">
+        <property name="text">
+         <string>CA</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_server">
+        <property name="text">
+         <string>Server</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_client">
+        <property name="text">
+         <string>Client</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Algorithm Dropdown -->
+   <item>
+    <widget class="QGroupBox" name="group_algo">
+     <property name="title">
+      <string>Step 2: Select Algorithm</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_algo">
+      <item>
+       <widget class="QComboBox" name="combo_algo"/>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_refresh">
+        <property name="text">
+         <string>🔄 Refresh</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Run Section -->
+   <item>
+    <widget class="QPushButton" name="btn_run">
+     <property name="text">
+      <string>🚀 Run Task</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 16px; background-color: #0078d7; color: white; border-radius: 8px; padding: 8px;</string>
+     </property>
+    </widget>
+   </item>
+
+   <!-- Progress Bar -->
+   <item>
+    <widget class="QProgressBar" name="progress_bar">
+     <property name="minimum">
+      <number>0</number>
+     </property>
+     <property name="maximum">
+      <number>100</number>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+
+   <!-- Output Log -->
+   <item>
+    <widget class="QTextEdit" name="log_output">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #111; color: #00ffcc; font-family: monospace;</string>
+     </property>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

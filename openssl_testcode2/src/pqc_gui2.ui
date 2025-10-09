@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PQCGui</class>
+ <widget class="QMainWindow" name="PQCGui">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout">
+    <item>
+     <widget class="QComboBox" name="roleCombo">
+      <item><property name="text"><string>CA</string></property></item>
+      <item><property name="text"><string>Server</string></property></item>
+      <item><property name="text"><string>Client</string></property></item>
+     </widget>
+    </item>
+    <item>
+     <widget class="QComboBox" name="algoCombo">
+      <item><property name="text"><string>Classical</string></property></item>
+      <item><property name="text"><string>NIST PQC</string></property></item>
+      <item><property name="text"><string>KAZ</string></property></item>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="runButton">
+      <property name="text"><string>Run Task</string></property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QProgressBar" name="progressBar"/>
+    </item>
+    <item>
+     <widget class="QPlainTextEdit" name="logOutput"/>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
