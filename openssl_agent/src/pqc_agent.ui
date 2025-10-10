@@ -2,66 +2,50 @@
 <ui version="4.0">
  <class>PQC_Agent</class>
  <widget class="QMainWindow" name="PQC_Agent">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>700</width>
-    <height>500</height>
-   </rect>
-  </property>
   <property name="windowTitle">
-   <string>PQC Agent - Crypto File Scanner</string>
+   <string>PQC Agent</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
-
     <item>
-     <widget class="QLabel" name="labelStatus">
+     <widget class="QPushButton" name="scanButton">
       <property name="text">
-       <string>📂 No folder selected</string>
+       <string>Scan File</string>
       </property>
      </widget>
     </item>
-
     <item>
-     <layout class="QHBoxLayout" name="buttonLayout">
-      <item>
-       <widget class="QPushButton" name="btnSelect">
-        <property name="text">
-         <string>Select Folder</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="btnScan">
-        <property name="text">
-         <string>Run Scan</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
+     <widget class="QPushButton" name="exportButton">
+      <property name="text">
+       <string>Export Results</string>
+      </property>
+     </widget>
     </item>
-
     <item>
-     <widget class="QProgressBar" name="progressBar">
-      <property name="value">
+     <widget class="QTableWidget" name="tableWidget">
+      <property name="columnCount">
+       <number>3</number>
+      </property>
+      <property name="rowCount">
        <number>0</number>
       </property>
+      <column>
+       <property name="text">
+        <string>File</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Algorithm</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Key Size</string>
+       </property>
+      </column>
      </widget>
     </item>
-
-    <item>
-     <widget class="QPlainTextEdit" name="outputText">
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
-      <property name="placeholderText">
-       <string>Scan results and logs will appear here...</string>
-      </property>
-     </widget>
-    </item>
-
    </layout>
   </widget>
  </widget>
