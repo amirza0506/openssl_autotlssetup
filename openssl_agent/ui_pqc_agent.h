@@ -11,10 +11,12 @@
 
 #include <QtCore/QVariant>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QHeaderView>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QLabel>
 #include <QtWidgets/QMainWindow>
+#include <QtWidgets/QPlainTextEdit>
+#include <QtWidgets/QProgressBar>
 #include <QtWidgets/QPushButton>
-#include <QtWidgets/QTableWidget>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QWidget>
 
@@ -25,42 +27,59 @@ class Ui_PQC_Agent
 public:
     QWidget *centralwidget;
     QVBoxLayout *verticalLayout;
-    QPushButton *scanButton;
-    QPushButton *exportButton;
-    QTableWidget *tableWidget;
+    QLabel *labelStatus;
+    QHBoxLayout *buttonLayout;
+    QPushButton *btnSelect;
+    QPushButton *btnScan;
+    QPushButton *btnExport;
+    QProgressBar *progressBar;
+    QPlainTextEdit *outputText;
 
     void setupUi(QMainWindow *PQC_Agent)
     {
         if (PQC_Agent->objectName().isEmpty())
             PQC_Agent->setObjectName("PQC_Agent");
+        PQC_Agent->resize(720, 480);
         centralwidget = new QWidget(PQC_Agent);
         centralwidget->setObjectName("centralwidget");
         verticalLayout = new QVBoxLayout(centralwidget);
         verticalLayout->setObjectName("verticalLayout");
-        scanButton = new QPushButton(centralwidget);
-        scanButton->setObjectName("scanButton");
+        labelStatus = new QLabel(centralwidget);
+        labelStatus->setObjectName("labelStatus");
 
-        verticalLayout->addWidget(scanButton);
+        verticalLayout->addWidget(labelStatus);
 
-        exportButton = new QPushButton(centralwidget);
-        exportButton->setObjectName("exportButton");
+        buttonLayout = new QHBoxLayout();
+        buttonLayout->setObjectName("buttonLayout");
+        btnSelect = new QPushButton(centralwidget);
+        btnSelect->setObjectName("btnSelect");
 
-        verticalLayout->addWidget(exportButton);
+        buttonLayout->addWidget(btnSelect);
 
-        tableWidget = new QTableWidget(centralwidget);
-        if (tableWidget->columnCount() < 3)
-            tableWidget->setColumnCount(3);
-        QTableWidgetItem *__qtablewidgetitem = new QTableWidgetItem();
-        tableWidget->setHorizontalHeaderItem(0, __qtablewidgetitem);
-        QTableWidgetItem *__qtablewidgetitem1 = new QTableWidgetItem();
-        tableWidget->setHorizontalHeaderItem(1, __qtablewidgetitem1);
-        QTableWidgetItem *__qtablewidgetitem2 = new QTableWidgetItem();
-        tableWidget->setHorizontalHeaderItem(2, __qtablewidgetitem2);
-        tableWidget->setObjectName("tableWidget");
-        tableWidget->setColumnCount(3);
-        tableWidget->setRowCount(0);
+        btnScan = new QPushButton(centralwidget);
+        btnScan->setObjectName("btnScan");
 
-        verticalLayout->addWidget(tableWidget);
+        buttonLayout->addWidget(btnScan);
+
+        btnExport = new QPushButton(centralwidget);
+        btnExport->setObjectName("btnExport");
+
+        buttonLayout->addWidget(btnExport);
+
+
+        verticalLayout->addLayout(buttonLayout);
+
+        progressBar = new QProgressBar(centralwidget);
+        progressBar->setObjectName("progressBar");
+        progressBar->setValue(0);
+
+        verticalLayout->addWidget(progressBar);
+
+        outputText = new QPlainTextEdit(centralwidget);
+        outputText->setObjectName("outputText");
+        outputText->setReadOnly(true);
+
+        verticalLayout->addWidget(outputText);
 
         PQC_Agent->setCentralWidget(centralwidget);
 
@@ -72,14 +91,10 @@ public:
     void retranslateUi(QMainWindow *PQC_Agent)
     {
         PQC_Agent->setWindowTitle(QCoreApplication::translate("PQC_Agent", "PQC Agent", nullptr));
-        scanButton->setText(QCoreApplication::translate("PQC_Agent", "Scan File", nullptr));
-        exportButton->setText(QCoreApplication::translate("PQC_Agent", "Export Results", nullptr));
-        QTableWidgetItem *___qtablewidgetitem = tableWidget->horizontalHeaderItem(0);
-        ___qtablewidgetitem->setText(QCoreApplication::translate("PQC_Agent", "File", nullptr));
-        QTableWidgetItem *___qtablewidgetitem1 = tableWidget->horizontalHeaderItem(1);
-        ___qtablewidgetitem1->setText(QCoreApplication::translate("PQC_Agent", "Algorithm", nullptr));
-        QTableWidgetItem *___qtablewidgetitem2 = tableWidget->horizontalHeaderItem(2);
-        ___qtablewidgetitem2->setText(QCoreApplication::translate("PQC_Agent", "Key Size", nullptr));
+        labelStatus->setText(QCoreApplication::translate("PQC_Agent", "Select a folder to begin scanning.", nullptr));
+        btnSelect->setText(QCoreApplication::translate("PQC_Agent", "Select Folder", nullptr));
+        btnScan->setText(QCoreApplication::translate("PQC_Agent", "Start Scan", nullptr));
+        btnExport->setText(QCoreApplication::translate("PQC_Agent", "Export Results", nullptr));
     } // retranslateUi
 
 };
