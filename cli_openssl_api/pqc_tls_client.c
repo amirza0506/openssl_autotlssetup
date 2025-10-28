@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>      // For sockaddr_in, inet_pton
+#include <arpa/inet.h>   
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <openssl/ssl.h>
@@ -12,7 +12,6 @@
 #define PORT 4443
 #define SERVER_IP "127.0.0.1"
 
-// ===== Helper: Generate Key Based on Algorithm =====
 EVP_PKEY *generate_key(const char *algo) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, algo, NULL);
     EVP_PKEY *pkey = NULL;
@@ -41,7 +40,6 @@ EVP_PKEY *generate_key(const char *algo) {
     return pkey;
 }
 
-// ===== Generate Client Certificate =====
 void generate_client_cert(const char *algo) {
     EVP_PKEY *pkey = generate_key(algo);
     if (!pkey) return;
@@ -50,7 +48,7 @@ void generate_client_cert(const char *algo) {
 
     ASN1_INTEGER_set(X509_get_serialNumber(crt), 1);
     X509_gmtime_adj(X509_get_notBefore(crt), 0);
-    X509_gmtime_adj(X509_get_notAfter(crt), 31536000L); // 1 year
+    X509_gmtime_adj(X509_get_notAfter(crt), 31536000L); 
     X509_set_pubkey(crt, pkey);
 
     X509_NAME *name = X509_get_subject_name(crt);
@@ -74,7 +72,6 @@ void generate_client_cert(const char *algo) {
     X509_free(crt);
 }
 
-// ===== Run TLS Client =====
 void run_client() {
     SSL_CTX *ctx;
     SSL *ssl;
@@ -87,14 +84,13 @@ void run_client() {
 
     ctx = SSL_CTX_new(TLS_client_method());
 
-    // Load certs
+
     if (!SSL_CTX_use_certificate_file(ctx, CERT_DIR "/client.crt", SSL_FILETYPE_PEM) ||
         !SSL_CTX_use_PrivateKey_file(ctx, CERT_DIR "/client.key", SSL_FILETYPE_PEM)) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
 
-    // (Optional) verify CA
     if (SSL_CTX_load_verify_locations(ctx, CERT_DIR "/ca.crt", NULL) != 1)
         printf("⚠️ Warning: could not load CA cert for verification\n");
 
@@ -137,7 +133,6 @@ void run_client() {
     SSL_CTX_free(ctx);
 }
 
-// ===== Main Menu =====
 int main() {
     printf("1) Generate client certificate\n2) Run TLS client\nChoice: ");
     int c; scanf("%d", &c);
