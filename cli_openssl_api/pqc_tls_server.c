@@ -2,16 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>      // For htons(), inet_addr(), sockaddr_in
-#include <netinet/in.h>     // For sockaddr_in structure
-#include <sys/socket.h>     // For socket(), bind(), listen(), accept()
+#include <arpa/inet.h>  
+#include <netinet/in.h>  
+#include <sys/socket.h>    
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
 #define CERT_DIR "./certs"
 #define PORT 4443
 
-// ===== Key and Certificate Generation =====
 EVP_PKEY *generate_key(const char *algo) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, algo, NULL);
     EVP_PKEY *pkey = NULL;
@@ -52,26 +51,23 @@ void generate_server_cert(const char *algo) {
     X509_free(crt);
 }
 
-// ===== TLS Server Run Function =====
 void run_server() {
     SSL_CTX *ctx;
     SSL *ssl;
     int sock, client;
-    struct sockaddr_in addr;   // FIX: now recognized because of includes
+    struct sockaddr_in addr;   
 
     SSL_library_init();
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
     ctx = SSL_CTX_new(TLS_server_method());
 
-    // Load server certs
     if (!SSL_CTX_use_certificate_file(ctx, CERT_DIR "/server.crt", SSL_FILETYPE_PEM) ||
         !SSL_CTX_use_PrivateKey_file(ctx, CERT_DIR "/server.key", SSL_FILETYPE_PEM)) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
 
-    // Standard socket setup
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) { perror("socket"); exit(EXIT_FAILURE); }
 
@@ -112,7 +108,6 @@ void run_server() {
     SSL_CTX_free(ctx);
 }
 
-// ===== Main Menu =====
 int main() {
     printf("1) Generate server certificate\n2) Run server\nChoice: ");
     int c; scanf("%d", &c);
