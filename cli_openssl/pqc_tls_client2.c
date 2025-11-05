@@ -1,4 +1,4 @@
-// pqc_tls_client.c
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +44,6 @@ static EVP_PKEY *generate_key(const char *algo) {
     return pkey;
 }
 
-/* Generate client CSR */
 static X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
     X509_REQ *req = X509_REQ_new();
     X509_NAME *name = X509_NAME_new();
@@ -61,7 +60,6 @@ static X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
     return req;
 }
 
-/* Sign client CSR with CA */
 static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     X509 *crt = X509_new();
     ASN1_INTEGER_set(X509_get_serialNumber(crt), 1);
@@ -83,8 +81,7 @@ static void generate_client_cert(const char *algo) {
 
     EVP_PKEY *pkey = generate_key(algo);
     X509_REQ *req = generate_csr(pkey, "TLS_Client");
-
-    /* Save CSR */
+    
     FILE *fk = fopen(CERT_DIR "/client.key", "wb");
     FILE *fr = fopen(CERT_DIR "/client.csr", "wb");
     PEM_write_PrivateKey(fk, pkey, NULL, NULL, 0, NULL, NULL);
@@ -93,7 +90,6 @@ static void generate_client_cert(const char *algo) {
     fclose(fr);
     printf("✅ Generated client key & CSR\n");
 
-    /* Load CA */
     FILE *fca = fopen(CERT_DIR "/ca.crt", "rb");
     FILE *fca_key = fopen(CERT_DIR "/ca.key", "rb");
     if (!fca || !fca_key) die("CA missing");
@@ -115,7 +111,6 @@ static void generate_client_cert(const char *algo) {
     EVP_PKEY_free(ca_key);
 }
 
-/* Connect to PQC TLS server */
 static void run_client(void) {
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
     if (!ctx) die("SSL_CTX_new");
@@ -124,7 +119,6 @@ static void run_client(void) {
     int sock;
     struct sockaddr_in addr;
 
-    /* Optional: load client cert for mTLS */
     SSL_CTX_use_certificate_file(ctx, CERT_DIR "/client.crt", SSL_FILETYPE_PEM);
     SSL_CTX_use_PrivateKey_file(ctx, CERT_DIR "/client.key", SSL_FILETYPE_PEM);
 
