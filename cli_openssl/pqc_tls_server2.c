@@ -1,5 +1,3 @@
-// pqc_tls_server_fixed.c
-// Fixed: robust checks, CSR flow for ML-DSA, proper filenames, no segfaults.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,14 +19,12 @@
 #define CERT_DIR "./certs"
 #define PORT 4443
 
-/* Helper */
 void die(const char *msg) {
     fprintf(stderr, "❌ %s\n", msg);
     ERR_print_errors_fp(stderr);
     exit(EXIT_FAILURE);
 }
 
-/* Try generate a key for provider name 'algo'; return NULL on failure. */
 EVP_PKEY *generate_key(const char *algo) {
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *ctx = NULL;
@@ -56,7 +52,6 @@ EVP_PKEY *generate_key(const char *algo) {
         return NULL;
     }
 
-    /* Set reasonable RSA keysize when generating RSA fallback */
     if (strcasecmp(nalgo, "RSA") == 0 || ctx == NULL) {
         EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
     }
@@ -87,7 +82,6 @@ X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
         return NULL;
     }
 
-    /* Minimal DN: CN only */
     if (!X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
                                     (unsigned char *)cn, -1, -1, 0)) {
         ERR_print_errors_fp(stderr);
@@ -110,7 +104,6 @@ X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
         return NULL;
     }
 
-    /* For PQC (ML-DSA) we must pass NULL digest; for RSA/ECDSA use SHA256 */
     const EVP_MD *md = NULL;
     if (!(EVP_PKEY_is_a(pkey, "ML-DSA-44") ||
           EVP_PKEY_is_a(pkey, "ML-DSA-65") ||
@@ -129,7 +122,6 @@ X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
     return req;
 }
 
-/* Sign CSR with CA key & cert and return newly minted X509 cert */
 X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     if (!req || !ca_key || !ca_crt) return NULL;
 
@@ -144,7 +136,6 @@ X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     X509_gmtime_adj(X509_get_notBefore(crt), 0);
     X509_gmtime_adj(X509_get_notAfter(crt), (long)60*60*24*DAYS_VALID);
 
-    /* issuer from CA */
     X509_set_issuer_name(crt, X509_get_subject_name(ca_crt));
     /* subject from CSR */
     X509_set_subject_name(crt, X509_REQ_get_subject_name(req));
@@ -154,7 +145,6 @@ X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     if (!X509_set_pubkey(crt, req_pub)) { ERR_print_errors_fp(stderr); EVP_PKEY_free(req_pub); X509_free(crt); return NULL; }
     EVP_PKEY_free(req_pub);
 
-    /* Use NULL digest if CA key algorithm is PQC that disallows explicit digest */
     const EVP_MD *md = NULL;
     if (!(EVP_PKEY_is_a(ca_key, "ML-DSA-44") ||
           EVP_PKEY_is_a(ca_key, "ML-DSA-65") ||
@@ -171,7 +161,6 @@ X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     return crt;
 }
 
-/* Create a cert directory if not present */
 int ensure_cert_dir(void) {
     if (mkdir(CERT_DIR, 0755) != 0 && errno != EEXIST) {
         perror("mkdir");
@@ -180,8 +169,6 @@ int ensure_cert_dir(void) {
     return 0;
 }
 
-/* Generate a self-signed certificate (RSA will be self-signed fine).
- * For PQC algorithms we prefer CSR flow, so generate_server_cert_crs is used for ML-DSA. */
 void generate_server_cert(const char *algo) {
     if (!algo) { fprintf(stderr, "algo missing\n"); return; }
     if (ensure_cert_dir() < 0) return;
@@ -209,7 +196,6 @@ void generate_server_cert(const char *algo) {
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char *)"TLS Server", -1, -1, 0);
     X509_set_issuer_name(crt, name);
 
-    /* Use NULL digest for PQC signing algorithms if needed */
     const EVP_MD *md = NULL;
     if (!(EVP_PKEY_is_a(pkey, "ML-DSA-44") ||
           EVP_PKEY_is_a(pkey, "ML-DSA-65") ||
@@ -250,20 +236,16 @@ void generate_server_cert(const char *algo) {
     X509_free(crt);
 }
 
-/* Generate key + CSR then sign CSR using CA files (for ML-DSA). */
 void generate_server_cert_crs(const char *algo, const char *name_base) {
     if (!algo || !name_base) return;
     if (ensure_cert_dir() < 0) return;
 
-    /* generate key */
     EVP_PKEY *pkey = generate_key(algo);
     if (!pkey) { fprintf(stderr,"❌ keygen failed\n"); return; }
 
-    /* CSR */
     X509_REQ *req = generate_csr(pkey, name_base);
     if (!req) { EVP_PKEY_free(pkey); fprintf(stderr,"❌ CSR generation failed\n"); return; }
 
-    /* Save key and csr to predictable filenames */
     char keypath[512], csrpath[512], crtpath[512];
     snprintf(keypath, sizeof(keypath), "%s/%s.key", CERT_DIR, name_base);
     snprintf(csrpath, sizeof(csrpath), "%s/%s.csr", CERT_DIR, name_base);
@@ -282,8 +264,7 @@ void generate_server_cert_crs(const char *algo, const char *name_base) {
         ERR_print_errors_fp(stderr);
     }
     fclose(fr);
-
-    /* Load CA files: user must create these beforehand */
+    
     char ca_crt_path[512], ca_key_path[512];
     snprintf(ca_crt_path, sizeof(ca_crt_path), "%s/ca.crt", CERT_DIR);
     snprintf(ca_key_path, sizeof(ca_key_path), "%s/ca.key", CERT_DIR);
@@ -336,7 +317,6 @@ void generate_server_cert_crs(const char *algo, const char *name_base) {
     EVP_PKEY_free(pkey);
 }
 
-/* Simple TLS server runner */
 void run_server(void) {
     SSL_CTX *ctx = NULL;
     SSL *ssl = NULL;
@@ -347,7 +327,6 @@ void run_server(void) {
     ctx = SSL_CTX_new(TLS_server_method());
     if (!ctx) die("SSL_CTX_new failed");
 
-    /* require server.crt and server.key exist */
     char server_crt[512], server_key[512];
     snprintf(server_crt, sizeof(server_crt), "%s/server.crt", CERT_DIR);
     snprintf(server_key, sizeof(server_key), "%s/server.key", CERT_DIR);
@@ -399,7 +378,6 @@ void run_server(void) {
     SSL_CTX_free(ctx);
 }
 
-/* main menu */
 int main(void) {
     printf("1) Generate server certificate (self-signed or CSR+CA)\n2) Run server\nChoice: ");
     int c = 0;
