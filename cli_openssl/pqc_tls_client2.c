@@ -11,7 +11,6 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
-
 #define CERT_DIR "./certs"
 #define PORT 4443
 #define DAYS_VALID 365
@@ -60,6 +59,45 @@ static X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
     return req;
 }
 
+// void print_certificate_info(X509 *cert)
+// {
+//     if (!cert) {
+//         printf("❌ No certificate loaded.\n");
+//         return;
+//     }
+
+//     char *subj = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
+//     char *issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+
+//     printf("\n===== 📜 Certificate Info =====\n");
+//     printf("Subject: %s\n", subj);
+//     printf("Issuer : %s\n", issuer);
+
+//     EVP_PKEY *pubkey = X509_get_pubkey(cert);
+//     if (pubkey) {
+//         printf("Public Key Bits: %d\n", EVP_PKEY_bits(pubkey));
+//         printf("Algorithm      : %s\n", OBJ_nid2ln(EVP_PKEY_base_id(pubkey)));
+//         EVP_PKEY_free(pubkey);
+//     }
+
+//     const ASN1_OBJECT *sig_alg;
+//     X509_get0_signature(NULL, &sig_alg, cert);
+//     char sigalg_name[128];
+//     OBJ_obj2txt(sigalg_name, sizeof(sigalg_name), sig_alg, 1);
+//     printf("Signature Algo : %s\n", sigalg_name);
+
+//     BIO *bio_out = BIO_new_fp(stdout, BIO_NOCLOSE);
+//     printf("Validity:\n  Not Before: ");
+//     ASN1_TIME_print(bio_out, X509_get0_notBefore(cert));
+//     printf("\n  Not After : ");
+//     ASN1_TIME_print(bio_out, X509_get0_notAfter(cert));
+//     printf("\n===============================\n");
+//     BIO_free(bio_out);
+
+//     OPENSSL_free(subj);
+//     OPENSSL_free(issuer);
+// }
+
 static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     X509 *crt = X509_new();
     ASN1_INTEGER_set(X509_get_serialNumber(crt), 1);
@@ -81,7 +119,7 @@ static void generate_client_cert(const char *algo) {
 
     EVP_PKEY *pkey = generate_key(algo);
     X509_REQ *req = generate_csr(pkey, "TLS_Client");
-    
+
     FILE *fk = fopen(CERT_DIR "/client.key", "wb");
     FILE *fr = fopen(CERT_DIR "/client.csr", "wb");
     PEM_write_PrivateKey(fk, pkey, NULL, NULL, 0, NULL, NULL);
@@ -119,6 +157,10 @@ static void run_client(void) {
     int sock;
     struct sockaddr_in addr;
 
+    if (SSL_CTX_set1_groups_list(ctx, "MLKEM512") != 1) {
+        fprintf(stderr, "⚠️ Warning: Failed to set PQC group MLKEM512. Falling back to default groups.\n");
+    }
+
     SSL_CTX_use_certificate_file(ctx, CERT_DIR "/client.crt", SSL_FILETYPE_PEM);
     SSL_CTX_use_PrivateKey_file(ctx, CERT_DIR "/client.key", SSL_FILETYPE_PEM);
 
@@ -148,6 +190,16 @@ static void run_client(void) {
             printf("📨 Received: %s\n", buf);
         }
     }
+
+    // X509 *peer_cert = SSL_get_peer_certificate(ssl);
+    // if (peer_cert) {
+    //     printf("✅ Client certificate received\n");
+    //     print_certificate_info(peer_cert);
+    //     X509_free(peer_cert);
+    // } else printf("⚠️ No client certificate presented\n");
+
+    // const char *msg = "Hello from PQC Server!";
+    // SSL_write(ssl, msg, strlen(msg));
 
     SSL_shutdown(ssl);
     SSL_free(ssl);

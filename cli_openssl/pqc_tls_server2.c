@@ -9,7 +9,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
@@ -66,7 +65,6 @@ EVP_PKEY *generate_key(const char *algo) {
     return pkey;
 }
 
-/* Generate CSR for given key and common name */
 X509_REQ *generate_csr(EVP_PKEY *pkey, const char *cn) {
     if (!pkey || !cn) return NULL;
 
@@ -137,7 +135,6 @@ X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     X509_gmtime_adj(X509_get_notAfter(crt), (long)60*60*24*DAYS_VALID);
 
     X509_set_issuer_name(crt, X509_get_subject_name(ca_crt));
-    /* subject from CSR */
     X509_set_subject_name(crt, X509_REQ_get_subject_name(req));
 
     EVP_PKEY *req_pub = X509_REQ_get_pubkey(req);
@@ -184,7 +181,7 @@ void generate_server_cert(const char *algo) {
 
     ASN1_INTEGER_set(X509_get_serialNumber(crt), 1);
     X509_gmtime_adj(X509_get_notBefore(crt), 0);
-    X509_gmtime_adj(X509_get_notAfter(crt), 31536000L); /* 1 year */
+    X509_gmtime_adj(X509_get_notAfter(crt), 31536000L); 
 
     if (!X509_set_pubkey(crt, pkey)) { EVP_PKEY_free(pkey); X509_free(crt); die("set_pubkey failed"); }
 
@@ -211,7 +208,6 @@ void generate_server_cert(const char *algo) {
         return;
     }
 
-    /* write files */
     char keypath[512], crtpath[512];
     snprintf(keypath, sizeof(keypath), "%s/server.key", CERT_DIR);
     snprintf(crtpath, sizeof(crtpath), "%s/server.crt", CERT_DIR);
@@ -264,7 +260,7 @@ void generate_server_cert_crs(const char *algo, const char *name_base) {
         ERR_print_errors_fp(stderr);
     }
     fclose(fr);
-    
+
     char ca_crt_path[512], ca_key_path[512];
     snprintf(ca_crt_path, sizeof(ca_crt_path), "%s/ca.crt", CERT_DIR);
     snprintf(ca_key_path, sizeof(ca_key_path), "%s/ca.key", CERT_DIR);
@@ -327,6 +323,10 @@ void run_server(void) {
     ctx = SSL_CTX_new(TLS_server_method());
     if (!ctx) die("SSL_CTX_new failed");
 
+    if (SSL_CTX_set1_groups_list(ctx, "MLKEM512") != 1) {
+        fprintf(stderr, "⚠️ Warning: Failed to set PQC group MLKEM512. Falling back to default groups.\n");
+    }
+
     char server_crt[512], server_key[512];
     snprintf(server_crt, sizeof(server_crt), "%s/server.crt", CERT_DIR);
     snprintf(server_key, sizeof(server_key), "%s/server.key", CERT_DIR);
@@ -378,6 +378,7 @@ void run_server(void) {
     SSL_CTX_free(ctx);
 }
 
+/* main menu */
 int main(void) {
     printf("1) Generate server certificate (self-signed or CSR+CA)\n2) Run server\nChoice: ");
     int c = 0;
@@ -390,7 +391,6 @@ int main(void) {
         if (a == 1) {
             generate_server_cert("RSA");
         } else if (a == 2) {
-            /* provide a base name for files, e.g. 'server_mldsa44' */
             generate_server_cert_crs("ML-DSA-44", "server");
         } else {
             fprintf(stderr,"Invalid selection\n");
