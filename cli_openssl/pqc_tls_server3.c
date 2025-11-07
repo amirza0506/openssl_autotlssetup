@@ -109,7 +109,7 @@ static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
         md = EVP_sha256();
 
     if (!X509_sign(crt, ca_key, md)) {
-        X509_free(crt);
+        // X509_free(crt);
         die("X509_sign (CA) failed");
     }
     return crt;

@@ -1,230 +1,187 @@
- #include <stdio.h>
- #include <stdlib.h>
- #include <string.h>
- #include <errno.h>
- #include <sys/stat.h>
- #include <unistd.h>
- #include <arpa/inet.h>
- #include <netinet/in.h>
- #include <sys/socket.h>
- #include <openssl/ssl.h>
- #include <openssl/err.h>
- #include <openssl/pem.h>
- #include <openssl/x509.h>
- #define CERT_DIR "./certs"
- #define PORT 4443
- #define DAYS_VALID 365
- 
- static void die(const char *msg) {
-     fprintf(stderr, "❌ %s\n", msg);
-     ERR_print_errors_fp(stderr);
-     exit(EXIT_FAILURE);
- }
+// pqc_tls_client.c
+// Client: generate client key+CSR and sign with CA (if present), or self-sign; connect to server and print server cert info.
 
- static const char *friendly_alg_name(EVP_PKEY *pkey) {
-     if (!pkey) return "Unknown";
-     int base = EVP_PKEY_base_id(pkey);
-     const char *n = OBJ_nid2ln(base);
-     if (n && strcmp(n, "undefined") != 0) return n;
-     if (EVP_PKEY_is_a(pkey, "ML-DSA-44")) return "ML-DSA-44 (PQC)";
-     if (EVP_PKEY_is_a(pkey, "ML-DSA-65")) return "ML-DSA-65 (PQC)";
-     if (EVP_PKEY_is_a(pkey, "ML-DSA-87")) return "ML-DSA-87 (PQC)";
-     return "Unknown/PQC";
- }
- 
- static void print_certificate_info(X509 *cert) {
-     if (!cert) { printf("No certificate\n"); return; }
-     char *subj = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
-     char *issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
-     printf("\n📜 === Server Certificate ===\n");
-     printf("Subject: %s\nIssuer : %s\n", subj ? subj : "(nil)", issuer ? issuer : "(nil)");
- 
-     EVP_PKEY *pub = X509_get_pubkey(cert);
-     if (pub) {
-         printf("Public Key Bits: %d\n", EVP_PKEY_bits(pub));
-         printf("Algorithm      : %s\n", friendly_alg_name(pub));
-         EVP_PKEY_free(pub);
-     }
- 
-     const ASN1_BIT_STRING *sig = NULL;
-     const X509_ALGOR *alg = NULL;
-     X509_get0_signature(&sig, &alg, cert);
-     if (alg) {
-         char oidbuf[256];
-         OBJ_obj2txt(oidbuf, sizeof(oidbuf), alg->algorithm, 1);
-         printf("Signature OID  : %s\n", oidbuf);
-     }
- 
-     BIO *bio = BIO_new_fp(stdout, BIO_NOCLOSE);
-     printf("Validity:\n  Not Before: ");
-     ASN1_TIME_print(bio, X509_get0_notBefore(cert));
-     printf("\n  Not After : ");
-     ASN1_TIME_print(bio, X509_get0_notAfter(cert));
-     printf("\n=============================\n\n");
-     BIO_free(bio);
-     OPENSSL_free(subj); OPENSSL_free(issuer);
- }
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/evp.h>
 
- static EVP_PKEY *generate_key(const char *algo) {
-     EVP_PKEY *pkey = NULL;
-     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, algo, NULL);
-     if (!ctx) {
-         fprintf(stderr, "⚠️  Algorithm %s not available — using RSA\n", algo);
-         ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
-         if (!ctx) die("EVP_PKEY_CTX_new_from_name failed");
-     }
-     if (EVP_PKEY_keygen_init(ctx) <= 0) die("EVP_PKEY_keygen_init");
-     if (strcasecmp(algo, "RSA") == 0) EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
-     if (EVP_PKEY_generate(ctx, &pkey) <= 0) die("EVP_PKEY_generate failed");
-     EVP_PKEY_CTX_free(ctx);
-     return pkey;
- }
+#define CERT_DIR "./certs"
+#define PORT 4443
+#define DAYS_VALID 365
 
- static void generate_client_cert_via_ca(const char *algo) {
-     if (mkdir(CERT_DIR, 0755) != 0 && errno != EEXIST) die("mkdir certs");
-     EVP_PKEY *pkey = generate_key(algo);
-     X509_REQ *req = X509_REQ_new();
-     X509_NAME *name = X509_NAME_new();
-     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char*)"client", -1, -1, 0);
-     X509_REQ_set_subject_name(req, name);
-     X509_REQ_set_pubkey(req, pkey);
- 
-     const EVP_MD *md = EVP_sha256();
-     if (!X509_REQ_sign(req, pkey, md)) {
-         ERR_print_errors_fp(stderr);
-         die("X509_REQ_sign failed");
-     }
- 
-     FILE *fk = fopen(CERT_DIR "/client.key", "wb");
-     if (!fk) die("fopen client.key");
-     if (!PEM_write_PrivateKey(fk, pkey, NULL, NULL, 0, NULL, NULL)) die("PEM_write_PrivateKey");
-     fclose(fk);
- 
-     FILE *fr = fopen(CERT_DIR "/client.csr", "wb");
-     if (!fr) die("fopen client.csr");
-     if (!PEM_write_X509_REQ(fr, req)) die("PEM_write_X509_REQ");
-     fclose(fr);
-     printf("✅ Generated client key & CSR in %s\n", CERT_DIR);
+static void die(const char *m) { fprintf(stderr, "ERROR: %s\n", m); ERR_print_errors_fp(stderr); exit(1); }
+static void ensure_cert_dir(void) { if (mkdir(CERT_DIR, 0755) != 0 && errno != EEXIST) { perror("mkdir"); exit(1);} }
 
-     FILE *fca = fopen(CERT_DIR "/ca.crt", "rb");
-     FILE *fca_key = fopen(CERT_DIR "/ca.key", "rb");
-     if (!fca || !fca_key) {
-         fprintf(stderr, "⚠️  CA files not present, you must sign client.csr manually using ca.key\n");
-         if (fca) fclose(fca);
-         if (fca_key) fclose(fca_key);
-         EVP_PKEY_free(pkey);
-         X509_REQ_free(req);
-         return;
-     }
- 
-     X509 *ca = PEM_read_X509(fca, NULL, NULL, NULL);
-     EVP_PKEY *cakey = PEM_read_PrivateKey(fca_key, NULL, NULL, NULL);
-     fclose(fca); fclose(fca_key);
-     if (!ca || !cakey) die("Failed to load CA files");
+static EVP_PKEY *generate_key_by_name(const char *name) {
+    EVP_PKEY *pkey = NULL; EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, name, NULL);
+    if (!ctx) { fprintf(stderr,"⚠ %s not available, fallback RSA\n",name); ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL); if (!ctx) die("ctx fail"); }
+    if (EVP_PKEY_keygen_init(ctx) <= 0) die("keygen_init");
+    if (strcasecmp(name,"RSA")==0) EVP_PKEY_CTX_set_rsa_keygen_bits(ctx,2048);
+    if (EVP_PKEY_generate(ctx, &pkey) <= 0) die("generate key failed");
+    EVP_PKEY_CTX_free(ctx); return pkey;
+}
 
-     X509 *crt = X509_new();
-     ASN1_INTEGER_set(X509_get_serialNumber(crt), 1);
-     X509_gmtime_adj(X509_get_notBefore(crt), 0);
-     X509_gmtime_adj(X509_get_notAfter(crt), 60L*60L*24L*DAYS_VALID);
-     X509_set_issuer_name(crt, X509_get_subject_name(ca));
-     X509_set_subject_name(crt, X509_REQ_get_subject_name(req));
-     EVP_PKEY *req_pub = X509_REQ_get_pubkey(req);
-     X509_set_pubkey(crt, req_pub);
-     EVP_PKEY_free(req_pub);
- 
-     const EVP_MD *md_ca = EVP_sha256();
-     if (!X509_sign(crt, cakey, md_ca)) {
-         ERR_print_errors_fp(stderr);
-         die("X509_sign (CA) failed");
-     }
- 
-     FILE *fc = fopen(CERT_DIR "/client.crt", "wb");
-     if (!fc) die("fopen client.crt");
-     if (!PEM_write_X509(fc, crt)) die("PEM_write_X509 client.crt");
-     fclose(fc);
-     printf("✅ Signed client certificate saved to %s/client.crt\n", CERT_DIR);
- 
-     X509_free(crt); X509_free(ca); EVP_PKEY_free(cakey);
-     EVP_PKEY_free(pkey); X509_REQ_free(req);
- }
+static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn) {
+    X509_REQ *req = X509_REQ_new(); if (!req) die("X509_REQ_new");
+    X509_NAME *name = X509_NAME_new();
+    X509_NAME_add_entry_by_txt(name,"CN",MBSTRING_ASC,(unsigned char*)cn,-1,-1,0);
+    X509_REQ_set_subject_name(req,name);
+    X509_REQ_set_pubkey(req,pkey);
+    const EVP_MD *md = NULL;
+    if (!(EVP_PKEY_is_a(pkey,"ML-DSA-44")||EVP_PKEY_is_a(pkey,"ML-DSA-65")||EVP_PKEY_is_a(pkey,"ML-DSA-87")))
+        md = EVP_sha256();
+    if (!X509_REQ_sign(req,pkey,md)) die("X509_REQ_sign");
+    X509_NAME_free(name); return req;
+}
 
- static void run_client_connect(void) {
-     OPENSSL_init_ssl(0, NULL);
-     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
-     if (!ctx) die("SSL_CTX_new");
+static int load_ca(EVP_PKEY **out_key, X509 **out_crt) {
+    char kp[256], cp[256]; snprintf(kp,sizeof(kp),"%s/ca.key",CERT_DIR); snprintf(cp,sizeof(cp),"%s/ca.crt",CERT_DIR);
+    FILE *fk = fopen(kp,"rb"); FILE *fc=fopen(cp,"rb");
+    if(!fk||!fc){ if(fk)fclose(fk); if(fc)fclose(fc); return 0;}
+    *out_key = PEM_read_PrivateKey(fk,NULL,NULL,NULL);
+    *out_crt = PEM_read_X509(fc,NULL,NULL,NULL);
+    fclose(fk); fclose(fc);
+    return (*out_key && *out_crt) ? 1 : 0;
+}
 
-     if (SSL_CTX_set1_groups_list(ctx, "MLKEM512") != 1)
-         fprintf(stderr, "⚠️  MLKEM512 group not available — continuing with default groups.\n");
+static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
+    X509 *crt = X509_new(); if(!crt) die("X509_new");
+    ASN1_INTEGER_set(X509_get_serialNumber(crt),1); X509_gmtime_adj(X509_get_notBefore(crt),0);
+    X509_gmtime_adj(X509_get_notAfter(crt),(long)60*60*24*DAYS_VALID);
+    X509_set_issuer_name(crt, X509_get_subject_name(ca_crt));
+    X509_set_subject_name(crt, X509_REQ_get_subject_name(req));
+    X509_set_pubkey(crt, X509_REQ_get_pubkey(req));
+    const EVP_MD *md = NULL;
+    if (!(EVP_PKEY_is_a(ca_key,"ML-DSA-44")||EVP_PKEY_is_a(ca_key,"ML-DSA-65")||EVP_PKEY_is_a(ca_key,"ML-DSA-87")))
+        md = EVP_sha256();
+    if (!X509_sign(crt, ca_key, md)) { X509_free(crt); die("X509_sign CA"); }
+    return crt;
+}
 
-     if (SSL_CTX_load_verify_locations(ctx, CERT_DIR "/ca.crt", NULL) != 1) {
-         fprintf(stderr, "⚠️  Could not load CA (certs/ca.crt). Server verification may fail.\n");
-     }
-     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
- 
-     if (access(CERT_DIR "/client.crt", R_OK) == 0 && access(CERT_DIR "/client.key", R_OK) == 0) {
-         if (SSL_CTX_use_certificate_file(ctx, CERT_DIR "/client.crt", SSL_FILETYPE_PEM) <= 0)
-             die("SSL_CTX_use_certificate_file (client)");
-         if (SSL_CTX_use_PrivateKey_file(ctx, CERT_DIR "/client.key", SSL_FILETYPE_PEM) <= 0)
-             die("SSL_CTX_use_PrivateKey_file (client)");
-     } else {
-         printf("⚠️  Client cert/key not found in %s — connecting without client cert (server may reject).\n", CERT_DIR);
-     }
- 
-     int s = socket(AF_INET, SOCK_STREAM, 0);
-     if (s < 0) die("socket");
-     struct sockaddr_in addr;
-     memset(&addr, 0, sizeof(addr));
-     addr.sin_family = AF_INET; addr.sin_port = htons(PORT);
-     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
- 
-     if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) die("connect");
- 
-     SSL *ssl = SSL_new(ctx);
-     SSL_set_fd(ssl, s);
- 
-     if (SSL_connect(ssl) <= 0) {
-         ERR_print_errors_fp(stderr);
-         die("SSL_connect failed");
-     }
-     printf("🔐 TLS handshake completed (client)\n");
+static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *base) {
+    ensure_cert_dir();
+    char kpath[256], crpath[256], csrpath[256];
+    snprintf(kpath,sizeof(kpath),"%s/%s.key",CERT_DIR,base);
+    snprintf(csrpath,sizeof(csrpath),"%s/%s.csr",CERT_DIR,base);
+    snprintf(crpath,sizeof(crpath),"%s/%s.crt",CERT_DIR,base);
+    FILE *fk=fopen(kpath,"wb"); if(!fk) die("open key"); PEM_write_PrivateKey(fk,pkey,NULL,NULL,0,NULL,NULL); fclose(fk);
+    FILE *fc=fopen(csrpath,"wb"); if(!fc) die("open csr"); PEM_write_X509_REQ(fc,req); fclose(fc);
+    if (!crt) {
+        /* self sign */
+        X509 *self = X509_new(); ASN1_INTEGER_set(X509_get_serialNumber(self),1);
+        X509_gmtime_adj(X509_get_notBefore(self),0); X509_gmtime_adj(X509_get_notAfter(self),(long)60*60*24*DAYS_VALID);
+        X509_set_subject_name(self, X509_REQ_get_subject_name(req)); X509_set_issuer_name(self, X509_REQ_get_subject_name(req));
+        X509_set_pubkey(self, X509_REQ_get_pubkey(req));
+        const EVP_MD *md=NULL; if(!(EVP_PKEY_is_a(pkey,"ML-DSA-44")||EVP_PKEY_is_a(pkey,"ML-DSA-65")||EVP_PKEY_is_a(pkey,"ML-DSA-87"))) md=EVP_sha256();
+        if(!X509_sign(self,pkey,md)) die("self sign client");
+        FILE *fcr=fopen(crpath,"wb"); if(!fcr) die("open client crt"); PEM_write_X509(fcr,self); fclose(fcr);
+        X509_free(self);
+    } else {
+        FILE *fcr=fopen(crpath,"wb"); if(!fcr) die("open client crt"); PEM_write_X509(fcr,crt); fclose(fcr);
+    }
+    printf("Wrote %s, %s, %s\n", kpath, csrpath, crpath);
+}
 
-     X509 *srv = SSL_get_peer_certificate(ssl);
-     if (srv) {
-         print_certificate_info(srv);
-         X509_free(srv);
-     } else {
-         printf("⚠️  No server certificate presented\n");
-     }
- 
-     char buf[4096];
-     int n = SSL_read(ssl, buf, sizeof(buf)-1);
-     if (n > 0) {
-         buf[n] = 0;
-         printf("📨 Received (%d bytes):\n%s\n", n, buf);
-     } else {
-         int err = SSL_get_error(ssl, n);
-         printf("SSL_read returned %d (error %d)\n", n, err);
-     }
+/* Print certificate useful fields */
+static void print_x509_info(X509 *cert) {
+    if (!cert) { printf("(no cert)\n"); return; }
+    char *s = X509_NAME_oneline(X509_get_subject_name(cert),NULL,0);
+    char *i = X509_NAME_oneline(X509_get_issuer_name(cert),NULL,0);
+    printf("Subject: %s\nIssuer:  %s\n", s, i);
+    EVP_PKEY *pk = X509_get_pubkey(cert);
+    if (pk) { printf("Pubkey bits: %d\nAlgo: %s\n", EVP_PKEY_bits(pk), OBJ_nid2ln(EVP_PKEY_base_id(pk))); EVP_PKEY_free(pk); }
+    const X509_ALGOR *sigalg; const ASN1_BIT_STRING *sig; X509_get0_signature(&sig,&sigalg,cert);
+    char algname[128]; OBJ_obj2txt(algname,sizeof(algname), sigalg->algorithm, 1);
+    printf("Signature alg: %s\n", algname);
+    OPENSSL_free(s); OPENSSL_free(i);
+}
 
-     SSL_shutdown(ssl);
-     SSL_free(ssl);
-     close(s);
-     SSL_CTX_free(ctx);
- }
- 
- int main(void) {
-     printf("1) Generate client cert via CA (requires certs/ca.crt & certs/ca.key)\n");
-     printf("2) Connect to mTLS server\n> ");
-     int c = 0;
-     if (scanf("%d", &c) != 1) return 1;
- 
-     if (c == 1) {
-         generate_client_cert_via_ca("ML-DSA-44");
-     } else if (c == 2) {
-         run_client_connect();
-     } else {
-         printf("Invalid\n");
-     }
-     return 0;
- }
- 
+/* Connect to server and print server cert + handshake details */
+static void run_client() {
+    OPENSSL_init_ssl(0,NULL);
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); if(!ctx) die("SSL_CTX_new");
+    SSL_CTX_set1_groups_list(ctx, "MLKEM512:X25519");
+
+    /* load trusted CA for verification, if present */
+    char cafile[256]; snprintf(cafile,sizeof(cafile),"%s/ca.crt",CERT_DIR);
+    if (access(cafile,R_OK)==0) {
+        if (!SSL_CTX_load_verify_locations(ctx, cafile, NULL)) fprintf(stderr,"Warning: failed load CA\n");
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    } else {
+        printf("No CA found, skipping server cert verify (insecure)\n");
+    }
+
+    /* If client cert exists, load it for mTLS */
+    char client_crt[256], client_key[256]; snprintf(client_crt,sizeof(client_crt),"%s/client.crt",CERT_DIR); snprintf(client_key,sizeof(client_key),"%s/client.key",CERT_DIR);
+    if (access(client_crt,R_OK)==0 && access(client_key,R_OK)==0) {
+        SSL_CTX_use_certificate_file(ctx, client_crt, SSL_FILETYPE_PEM);
+        SSL_CTX_use_PrivateKey_file(ctx, client_key, SSL_FILETYPE_PEM);
+    }
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr = {0}; addr.sin_family=AF_INET; addr.sin_port=htons(PORT);
+    inet_pton(AF_INET,"127.0.0.1",&addr.sin_addr);
+    if (connect(sock,(struct sockaddr*)&addr,sizeof(addr))<0) { perror("connect"); SSL_CTX_free(ctx); return; }
+
+    SSL *ssl = SSL_new(ctx); SSL_set_fd(ssl,sock);
+    if (SSL_connect(ssl) <= 0) { ERR_print_errors_fp(stderr); SSL_free(ssl); close(sock); SSL_CTX_free(ctx); return; }
+    printf("TLS handshake OK\n");
+
+    /* print server cert */
+    X509 *srv = SSL_get_peer_certificate(ssl);
+    if (srv) { printf("===== Server certificate =====\n"); print_x509_info(srv); X509_free(srv); }
+    else printf("No server certificate presented\n");
+
+    const SSL_CIPHER *cipher = SSL_get_current_cipher(ssl);
+    const char *cname = cipher ? SSL_CIPHER_get_name(cipher) : "Unknown";
+    printf("Cipher suite: %s\n", cname);
+
+    int gid = SSL_get_shared_group(ssl, 0);
+    const char *gname = "unknown";
+    if (gid>0) { const char *tmp = SSL_group_to_name(ssl, gid); if (tmp) gname = tmp; }
+    printf("KEX group: %s (id=%d)\n", gname, gid);
+
+    /* Read response */
+    char buf[4096]; int n = SSL_read(ssl, buf, sizeof(buf)-1);
+    if (n>0) { buf[n]=0; printf("Received:\n%s\n", buf); }
+
+    SSL_shutdown(ssl); SSL_free(ssl); close(sock); SSL_CTX_free(ctx);
+}
+
+int main(void) {
+    OPENSSL_init_crypto(0,NULL);
+    printf("PQC TLS Client\n1) Generate client key+CSR and sign via CA (if present)\n2) Connect to server\nChoice: ");
+    int c=0; if (scanf("%d",&c)!=1) return 0;
+    if (c==1) {
+        printf("Choose algo: 1) RSA 2) ML-DSA-44\nChoice: ");
+        int a=0; if (scanf("%d",&a)!=1) return 0;
+        const char *algo = (a==2) ? "ML-DSA-44" : "RSA";
+        ensure_cert_dir();
+        EVP_PKEY *pkey = generate_key_by_name(algo);
+        X509_REQ *req = create_csr(pkey, "client");
+        EVP_PKEY *ca_key=NULL; X509 *ca_crt=NULL; X509 *signed_cert=NULL;
+        if (load_ca(&ca_key, &ca_crt)) {
+            signed_cert = sign_csr_with_ca(req, ca_key, ca_crt);
+            write_pems(pkey, req, signed_cert, "client");
+            EVP_PKEY_free(ca_key); X509_free(ca_crt); X509_free(signed_cert);
+        } else {
+            printf("No CA, self-signing client cert\n");
+            write_pems(pkey, req, NULL, "client");
+        }
+        X509_REQ_free(req); EVP_PKEY_free(pkey);
+    } else if (c==2) {
+        run_client();
+    } else printf("invalid\n");
+    return 0;
+}
