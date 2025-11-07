@@ -1,6 +1,3 @@
-// pqc_tls_client.c
-// Client: generate client key+CSR and sign with CA (if present), or self-sign; connect to server and print server cert info.
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,7 +75,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     FILE *fk=fopen(kpath,"wb"); if(!fk) die("open key"); PEM_write_PrivateKey(fk,pkey,NULL,NULL,0,NULL,NULL); fclose(fk);
     FILE *fc=fopen(csrpath,"wb"); if(!fc) die("open csr"); PEM_write_X509_REQ(fc,req); fclose(fc);
     if (!crt) {
-        /* self sign */
         X509 *self = X509_new(); ASN1_INTEGER_set(X509_get_serialNumber(self),1);
         X509_gmtime_adj(X509_get_notBefore(self),0); X509_gmtime_adj(X509_get_notAfter(self),(long)60*60*24*DAYS_VALID);
         X509_set_subject_name(self, X509_REQ_get_subject_name(req)); X509_set_issuer_name(self, X509_REQ_get_subject_name(req));
@@ -93,7 +89,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     printf("Wrote %s, %s, %s\n", kpath, csrpath, crpath);
 }
 
-/* Print certificate useful fields */
 static void print_x509_info(X509 *cert) {
     if (!cert) { printf("(no cert)\n"); return; }
     char *s = X509_NAME_oneline(X509_get_subject_name(cert),NULL,0);
@@ -107,13 +102,11 @@ static void print_x509_info(X509 *cert) {
     OPENSSL_free(s); OPENSSL_free(i);
 }
 
-/* Connect to server and print server cert + handshake details */
 static void run_client() {
     OPENSSL_init_ssl(0,NULL);
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); if(!ctx) die("SSL_CTX_new");
     SSL_CTX_set1_groups_list(ctx, "MLKEM512:X25519");
 
-    /* load trusted CA for verification, if present */
     char cafile[256]; snprintf(cafile,sizeof(cafile),"%s/ca.crt",CERT_DIR);
     if (access(cafile,R_OK)==0) {
         if (!SSL_CTX_load_verify_locations(ctx, cafile, NULL)) fprintf(stderr,"Warning: failed load CA\n");
@@ -122,7 +115,6 @@ static void run_client() {
         printf("No CA found, skipping server cert verify (insecure)\n");
     }
 
-    /* If client cert exists, load it for mTLS */
     char client_crt[256], client_key[256]; snprintf(client_crt,sizeof(client_crt),"%s/client.crt",CERT_DIR); snprintf(client_key,sizeof(client_key),"%s/client.key",CERT_DIR);
     if (access(client_crt,R_OK)==0 && access(client_key,R_OK)==0) {
         SSL_CTX_use_certificate_file(ctx, client_crt, SSL_FILETYPE_PEM);
@@ -138,7 +130,6 @@ static void run_client() {
     if (SSL_connect(ssl) <= 0) { ERR_print_errors_fp(stderr); SSL_free(ssl); close(sock); SSL_CTX_free(ctx); return; }
     printf("TLS handshake OK\n");
 
-    /* print server cert */
     X509 *srv = SSL_get_peer_certificate(ssl);
     if (srv) { printf("===== Server certificate =====\n"); print_x509_info(srv); X509_free(srv); }
     else printf("No server certificate presented\n");
@@ -152,7 +143,6 @@ static void run_client() {
     if (gid>0) { const char *tmp = SSL_group_to_name(ssl, gid); if (tmp) gname = tmp; }
     printf("KEX group: %s (id=%d)\n", gname, gid);
 
-    /* Read response */
     char buf[4096]; int n = SSL_read(ssl, buf, sizeof(buf)-1);
     if (n>0) { buf[n]=0; printf("Received:\n%s\n", buf); }
 
