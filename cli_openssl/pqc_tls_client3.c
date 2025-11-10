@@ -105,7 +105,7 @@ static void print_x509_info(X509 *cert) {
 static void run_client() {
     OPENSSL_init_ssl(0,NULL);
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); if(!ctx) die("SSL_CTX_new");
-    SSL_CTX_set1_groups_list(ctx, "MLKEM512:X25519");
+    SSL_CTX_set1_groups_list(ctx, "X25519MLKEM512");
 
     char cafile[256]; snprintf(cafile,sizeof(cafile),"%s/ca.crt",CERT_DIR);
     if (access(cafile,R_OK)==0) {
@@ -123,7 +123,7 @@ static void run_client() {
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in addr = {0}; addr.sin_family=AF_INET; addr.sin_port=htons(PORT);
-    inet_pton(AF_INET,"127.0.0.1",&addr.sin_addr);
+    inet_pton(AF_INET,"10.33.200.160",&addr.sin_addr);
     if (connect(sock,(struct sockaddr*)&addr,sizeof(addr))<0) { perror("connect"); SSL_CTX_free(ctx); return; }
 
     SSL *ssl = SSL_new(ctx); SSL_set_fd(ssl,sock);
