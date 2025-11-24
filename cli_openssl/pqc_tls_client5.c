@@ -1,6 +1,3 @@
-// pqc_tls_client_new_fixed.c
-// Patched version: fixes init order, adds --host/SNI, cleans up resources, removes odd no-op free.
-
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +21,6 @@
 #define CERT_DIR "./certs"
 #define PORT 4443
 #define DAYS_VALID 365
-
-/* global pointer to loaded CA cert for fallback verification */
 static X509 *g_ca_cert = NULL;
 
 static void die(const char *msg) {
@@ -41,9 +36,7 @@ static void ensure_cert_dir(void) {
     }
 }
 
-/* Try to load common provider names (best-effort). It's OK if they don't exist. */
 static void try_load_providers(void) {
-    /* Try several common PQ provider names; replace/add names as needed for your system */
     const char *prov_names[] = {
         "oqsprovider", "oqs", "pqcprovider", "pqc", "apple", "microsoft", "ibmpqc", NULL
     };
@@ -52,12 +45,11 @@ static void try_load_providers(void) {
         if (pr) {
             printf("Loaded provider: %s\n", *p);
         } else {
-            ERR_clear_error(); /* not fatal */
+            ERR_clear_error();
         }
     }
 }
 
-/* create named key (RSA or provider-backed name). Falls back to RSA if unavailable. */
 static EVP_PKEY *generate_key_by_name(const char *name) {
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(NULL, name, NULL);
@@ -75,7 +67,6 @@ static EVP_PKEY *generate_key_by_name(const char *name) {
     return pkey;
 }
 
-/* Provider-friendly signing helpers (md == NULL -> let provider choose) */
 static void sign_x509_req_with_key(X509_REQ *req, EVP_PKEY *pkey) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     if (!mdctx) die("EVP_MD_CTX_new");
@@ -104,8 +95,6 @@ static void sign_x509_with_key(X509 *crt, EVP_PKEY *pkey) {
     }
     EVP_MD_CTX_free(mdctx);
 }
-
-/* Create CSR and sign with the private key */
 static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn) {
     X509_REQ *req = X509_REQ_new();
     if (!req) die("X509_REQ_new");
@@ -120,7 +109,6 @@ static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn) {
     return req;
 }
 
-/* Load CA key & cert if present. Also check private key matches cert. */
 static int load_ca(EVP_PKEY **out_key, X509 **out_crt, const char *ca_basename) {
     char kp[512], cp[512];
     snprintf(kp, sizeof(kp), "%s/%s.key", CERT_DIR, ca_basename);
@@ -162,7 +150,7 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     fclose(fr);
 
     if (!crt) {
-        // self-sign
+        
         X509 *self = X509_new();
         if (!self) die("X509_new self");
         ASN1_INTEGER_set(X509_get_serialNumber(self), 1);
@@ -187,7 +175,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     printf("Wrote %s, %s, %s\n", keypath, csrpath, crtpath);
 }
 
-/* Print some fields from X509 */
 static void print_x509_info(X509 *cert) {
     if (!cert) { printf("(no cert)\n"); return; }
     char *subj = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
@@ -212,11 +199,6 @@ static void print_x509_info(X509 *cert) {
     if (iss)  OPENSSL_free(iss);
 }
 
-/* Lenient verification callback:
-   - If OpenSSL preverification succeeds, accept.
-   - If preverification fails due to inability to verify signature (provider missing),
-     fall back to checking that the peer cert's issuer DN equals our loaded CA subject DN.
-   WARNING: fallback is lenient and should only be used for debugging/testing. */
 static int verify_callback(int preverify_ok, X509_STORE_CTX *xctx) {
     if (preverify_ok) return 1;
     int err = X509_STORE_CTX_get_error(xctx);
@@ -245,9 +227,8 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX *xctx) {
     return 0;
 }
 
-/* Connect to server and perform TLS handshake */
 static void do_connect(int verify_mode_insecure, const char *groups_list, const char *host) {
-    /* Initialize OpenSSL (crypto) first, then load providers */
+
     if (!OPENSSL_init_crypto(0, NULL)) die("OPENSSL_init_crypto");
     OPENSSL_init_ssl(0, NULL);
 
@@ -276,13 +257,12 @@ static void do_connect(int verify_mode_insecure, const char *groups_list, const 
                 fprintf(stderr, "Warning: could not load CA file %s\n", cafile);
                 ERR_clear_error();
             } else {
-                /* load CA cert into global for fallback checks */
                 FILE *f = fopen(cafile, "rb");
                 if (f) {
                     X509 *tmp = PEM_read_X509(f, NULL, NULL, NULL);
                     fclose(f);
                     if (tmp) {
-                        g_ca_cert = tmp; /* used by verify_callback */
+                        g_ca_cert = tmp; 
                     }
                 }
                 SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
@@ -295,14 +275,12 @@ static void do_connect(int verify_mode_insecure, const char *groups_list, const 
         }
     }
 
-    /* Connect TCP */
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) { SSL_CTX_free(ctx); die("socket"); }
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET; addr.sin_port = htons(PORT);
     const char *connect_addr = "10.242.236.160";
     if (host && strlen(host) > 0 && strcmp(host, "127.0.0.1") != 0) {
-        /* if host is not numeric, keep using 127.0.0.1 for demo; user can change here to use DNS */
         connect_addr = host;
     }
     addr.sin_addr.s_addr = inet_addr(connect_addr);
@@ -317,7 +295,6 @@ static void do_connect(int verify_mode_insecure, const char *groups_list, const 
     if (!ssl) { close(sock); SSL_CTX_free(ctx); die("SSL_new"); }
     SSL_set_fd(ssl, sock);
     if (host && strlen(host) > 0) {
-        /* set SNI and hostname for verification */
         if (!SSL_set_tlsext_host_name(ssl, host)) {
             fprintf(stderr, "Warning: could not set SNI to %s\n", host);
             ERR_clear_error();
@@ -364,7 +341,6 @@ static void do_connect(int verify_mode_insecure, const char *groups_list, const 
     if (g_ca_cert) { X509_free(g_ca_cert); g_ca_cert = NULL; }
 }
 
-/* Minimal interactive menu similar to your original client */
 int main(int argc, char **argv) {
     int insecure = 0;
     const char *groups = NULL;
@@ -386,7 +362,6 @@ int main(int argc, char **argv) {
         const char *algo = (a == 2) ? "ML-DSA-44" : "RSA";
 
         ensure_cert_dir();
-        /* Initialize crypto to ensure keygen works with providers */
         if (!OPENSSL_init_crypto(0, NULL)) die("OPENSSL_init_crypto");
         try_load_providers();
 
