@@ -1,7 +1,3 @@
-// pqc_server.c
-// Simple TLS server that can generate key/CSR, sign via local CA (if present) or self-sign,
-// run TLS server using optional PQC groups, and allow an "insecure" mode to accept any client cert.
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +8,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
@@ -36,7 +31,6 @@ static void ensure_cert_dir(void) {
     }
 }
 
-/* create named key (RSA or provider name e.g. ML-DSA-44). Falls back to RSA if unavailable. */
 static EVP_PKEY *generate_key_by_name(const char *name) {
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(NULL, name, NULL);
@@ -54,16 +48,12 @@ static EVP_PKEY *generate_key_by_name(const char *name) {
     return pkey;
 }
 
-/* Helper: sign X509_REQ using EVP_DigestSign/X509_REQ_sign_ctx.
-   Note: we do NOT explicitly select a digest (md is passed as NULL) so the provider
-   or OpenSSL default can decide the appropriate scheme. This avoids hard-coding a hash
-   function such as MD5/SHA1/SHA256 in our code. */
 static void sign_x509_req_with_key(X509_REQ *req, EVP_PKEY *pkey) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     if (!mdctx) die("EVP_MD_CTX_new");
 
     EVP_PKEY_CTX *pctx = NULL;
-    /* Pass md=NULL so the provider chooses defaults (or algorithm-specific behavior). */
+
     if (EVP_DigestSignInit(mdctx, &pctx, NULL, NULL, pkey) <= 0) {
         EVP_MD_CTX_free(mdctx);
         die("EVP_DigestSignInit failed for CSR");
@@ -76,8 +66,6 @@ static void sign_x509_req_with_key(X509_REQ *req, EVP_PKEY *pkey) {
     EVP_MD_CTX_free(mdctx);
 }
 
-/* Helper: sign X509 certificate using EVP_DigestSign/X509_sign_ctx.
-   We pass md=NULL to avoid hard-coding digest algorithms in this tool. */
 static void sign_x509_with_key(X509 *crt, EVP_PKEY *pkey) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     if (!mdctx) die("EVP_MD_CTX_new");
@@ -95,7 +83,6 @@ static void sign_x509_with_key(X509 *crt, EVP_PKEY *pkey) {
     EVP_MD_CTX_free(mdctx);
 }
 
-/* Create CSR and sign with the private key */
 static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn) {
     X509_REQ *req = X509_REQ_new();
     if (!req) die("X509_REQ_new");
@@ -105,15 +92,11 @@ static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn) {
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char *)cn, -1, -1, 0);
     X509_REQ_set_subject_name(req, name);
     X509_REQ_set_pubkey(req, pkey);
-
-    /* Use provider-friendly signing path without forcing a specific digest */
     sign_x509_req_with_key(req, pkey);
 
     X509_NAME_free(name);
     return req;
 }
-
-/* Load CA key & cert if present */
 static int load_ca(EVP_PKEY **out_key, X509 **out_crt, const char *ca_basename) {
     char kp[512], cp[512];
     snprintf(kp, sizeof(kp), "%s/%s.key", CERT_DIR, ca_basename);
@@ -130,7 +113,6 @@ static int load_ca(EVP_PKEY **out_key, X509 **out_crt, const char *ca_basename) 
     fclose(fk); fclose(fc);
     if (!*out_key || !*out_crt) return 0;
 
-    /* Ensure the CA private key matches the CA certificate (early sanity check) */
     if (!X509_check_private_key(*out_crt, *out_key)) {
         fprintf(stderr, "ERROR: CA key does not match CA certificate (%s/%s.key vs %s/%s.crt)\n", CERT_DIR, ca_basename, CERT_DIR, ca_basename);
         EVP_PKEY_free(*out_key);
@@ -141,8 +123,6 @@ static int load_ca(EVP_PKEY **out_key, X509 **out_crt, const char *ca_basename) 
 
     return 1;
 }
-
-/* Sign CSR with CA (digest choice delegated to provider) */
 static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     X509 *crt = X509_new();
     if (!crt) die("X509_new failed");
@@ -156,8 +136,6 @@ static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt) {
     EVP_PKEY *req_pub = X509_REQ_get_pubkey(req);
     X509_set_pubkey(crt, req_pub);
     EVP_PKEY_free(req_pub);
-
-    /* Use provider-friendly signing path */
     sign_x509_with_key(crt, ca_key);
 
     return crt;
@@ -179,7 +157,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     fclose(fr);
 
     if (!crt) {
-        // self-sign
         X509 *self = X509_new();
         ASN1_INTEGER_set(X509_get_serialNumber(self), 1);
         X509_gmtime_adj(X509_get_notBefore(self), 0);
@@ -187,11 +164,9 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
         X509_set_subject_name(self, X509_REQ_get_subject_name(req));
         X509_set_issuer_name(self, X509_REQ_get_subject_name(req));
 
-        /* set public key from CSR */
         EVP_PKEY *req_pub = X509_REQ_get_pubkey(req);
         X509_set_pubkey(self, req_pub);
 
-        /* SIGN with the certificate private key using provider-friendly path (no explicit digest) */
         sign_x509_with_key(self, pkey);
 
         EVP_PKEY_free(req_pub);
@@ -208,7 +183,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     printf("Wrote %s, %s, %s\n", keypath, csrpath, crtpath);
 }
 
-/* Prints a few fields from the X509 cert */
 static void print_x509_info(X509 *cert) {
     if (!cert) { printf("(no cert)\n"); return; }
     char *subj = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
@@ -229,7 +203,6 @@ static void print_x509_info(X509 *cert) {
     OPENSSL_free(subj); OPENSSL_free(iss);
 }
 
-/* Run TLS server (prints negotiated cipher and group info). If verify_mode_insecure==1, don't require client verify. */
 static void run_server(int verify_mode_insecure, const char *groups_list) {
     OPENSSL_init_ssl(0, NULL);
     SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
@@ -252,7 +225,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
     if (SSL_CTX_use_certificate_file(ctx, srv_crt, SSL_FILETYPE_PEM) <= 0) die("SSL_CTX_use_certificate_file");
     if (SSL_CTX_use_PrivateKey_file(ctx, srv_key, SSL_FILETYPE_PEM) <= 0) die("SSL_CTX_use_PrivateKey_file");
 
-    /* Ensure server cert and key match — fail fast with clear message */
     if (!SSL_CTX_check_private_key(ctx)) {
         die("Server certificate and private key do NOT match (SSL_CTX_check_private_key failed)");
     }
@@ -261,7 +233,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
         printf("Server running in INSECURE verify mode (no peer cert verification).\n");
     } else {
-        // Require client cert verification if CA is present
         char cafile[512]; snprintf(cafile, sizeof(cafile), "%s/ca.crt", CERT_DIR);
         if (access(cafile, R_OK) == 0) {
             if (!SSL_CTX_load_verify_locations(ctx, cafile, NULL)) {
@@ -307,14 +278,12 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
     }
     printf("KEX group: %s (id=%d)\n", gname, gid);
 
-    // print server cert loaded into ctx
     X509 *srvcert = SSL_CTX_get0_certificate(ctx);
     if (srvcert) {
         printf("Server cert info:\n");
         print_x509_info(srvcert);
     }
 
-    // If client presented cert, print it
     X509 *peer = SSL_get_peer_certificate(ssl);
     if (peer) {
         printf("Client presented certificate:\n");
@@ -324,7 +293,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
         printf("Client did not present a certificate.\n");
     }
 
-    // serve a simple response
     const char *msg = "HTTP/1.1 200 OK\r\nContent-Length:12\r\n\r\nHello TLS\n";
     SSL_write(ssl, msg, (int)strlen(msg));
 
@@ -340,8 +308,6 @@ int main(int argc, char **argv) {
 
     int insecure = 0;
     const char *groups = NULL;
-
-    // quick argv parse: --insecure and --groups "MLKEM512"
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--insecure") == 0) insecure = 1;
         else if (strcmp(argv[i], "--groups") == 0 && i+1 < argc) { groups = argv[++i]; }
@@ -360,7 +326,6 @@ int main(int argc, char **argv) {
         EVP_PKEY *pkey = generate_key_by_name(algo);
         X509_REQ *req = create_csr(pkey, "server");
 
-        // try to load CA named "ca" (ca.key / ca.crt). If present, sign; otherwise self-sign.
         EVP_PKEY *ca_key = NULL; X509 *ca_crt = NULL;
         int have_ca = load_ca(&ca_key, &ca_crt, "ca");
         X509 *signed_cert = NULL;
