@@ -14,6 +14,17 @@
 #include <openssl/x509.h>
 #include <openssl/evp.h>
 
+static void die(const char *msg);
+static void print_x509_info(X509 *cert);
+static void ensure_cert_dir(void);
+static EVP_PKEY *generate_key_by_name(const char *name);
+static void sign_x509_req_with_key(X509_REQ *req, EVP_PKEY *pkey);
+static void sign_x509_with_key(X509 *crt, EVP_PKEY *pkey);
+static X509_REQ *create_csr(EVP_PKEY *pkey, const char *cn);
+static int load_ca(EVP_PKEY **out_key, X509 **out_crt, const char *ca_basename);
+static X509 *sign_csr_with_ca(X509_REQ *req, EVP_PKEY *ca_key, X509 *ca_crt);
+static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *basename);
+
 #define CERT_DIR "./certs"
 #define PORT 4443
 #define DAYS_VALID 365
