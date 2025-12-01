@@ -255,7 +255,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
     if (listen(sock, 1) < 0) die("listen");
     printf("Server listening on port %d\n", PORT);
 
-    // Accept and serve clients in a loop
     while (1) {
         int client = accept(sock, NULL, NULL);
         if (client < 0) {
@@ -291,9 +290,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
             print_x509_info(srvcert);
         }
 
-        // -- No printing or checking of client certificate --
-
-        // Communicate: echo loop
         printf("Entering secure echo session with client.\n");
         char buf[4096];
         int readres;
@@ -312,7 +308,6 @@ static void run_server(int verify_mode_insecure, const char *groups_list) {
         close(client);
     }
 
-    // Never reached, but for good measure:
     close(sock);
     SSL_CTX_free(ctx);
 }
