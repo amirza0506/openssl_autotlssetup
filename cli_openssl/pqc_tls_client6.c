@@ -187,9 +187,6 @@ static void write_pems(EVP_PKEY *pkey, X509_REQ *req, X509 *crt, const char *bas
     printf("Wrote %s, %s, %s\n", keypath, csrpath, crtpath);
 }
 
-//////////////////////////////////////////////////////////////////////////////
-// NEW CONNECTION FUNCTION — RUN OPENSSL s_client
-//////////////////////////////////////////////////////////////////////////////
 static void do_connect_external(const char *ip, const char *port) {
 
     char cmd[512];
@@ -212,10 +209,6 @@ static void do_connect_external(const char *ip, const char *port) {
 
     pclose(fp);
 }
-
-//////////////////////////////////////////////////////////////////////////////
-// MAIN MENU
-//////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv) {
     int insecure = 0;
