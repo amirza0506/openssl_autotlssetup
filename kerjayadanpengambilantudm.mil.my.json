@@ -1,0 +1,15 @@
+{
+    "domain": "kerjayadanpengambilantudm.mil.my",
+    "used_target": "kerjayadanpengambilantudm.mil.my",
+    "status": "success",
+    "data": {
+        "tls_version": "TLSv1.3",
+        "cipher": "TLS_AES_256_GCM_SHA384",
+        "peer_signature_type": "rsa_pss_rsae_sha256",
+        "peer_signing_digest": "SHA256",
+        "peer_temp_key": "X25519, 253 bits",
+        "negotiated_group": null,
+        "subject": "CN=www.kerjayadanpengambilantudm.trioxine.com",
+        "issuer": "C=US, O=Let's Encrypt, CN=R12"
+    }
+}

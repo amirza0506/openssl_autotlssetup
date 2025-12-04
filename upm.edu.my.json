@@ -1,0 +1,15 @@
+{
+    "domain": "upm.edu.my",
+    "used_target": "upm.edu.my",
+    "status": "success",
+    "data": {
+        "tls_version": "TLSv1.3",
+        "cipher": "TLS_AES_256_GCM_SHA384",
+        "peer_signature_type": "rsa_pss_rsae_sha256",
+        "peer_signing_digest": "SHA256",
+        "peer_temp_key": "X25519, 253 bits",
+        "negotiated_group": null,
+        "subject": "CN=*.upm.edu.my",
+        "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36"
+    }
+}
