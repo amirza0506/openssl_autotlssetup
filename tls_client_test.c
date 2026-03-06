@@ -64,8 +64,8 @@ void print_certificate_info(SSL *ssl)
         return;
     }
 
-    X509_print_fp(stdout, cert);
-    PEM_write_X509(stdout,cert);
+    X509_print_fp(stdout, cert);//untuk keluarkan public key dan signature algo
+    PEM_write_X509(stdout,cert);//untuk keluarkan pem atau cert in pem format
 
     char *line;
 
