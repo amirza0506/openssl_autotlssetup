@@ -95,7 +95,6 @@ void print_certificate_info(SSL *ssl)
     X509_free(cert);
 }
 
-/* ================= NEW PART: RECEIVE THREAD ================= */
 void *receive_handler(void *arg)
 {
     SSL *ssl = (SSL *)arg;
@@ -114,7 +113,6 @@ void *receive_handler(void *arg)
     printf("Disconnected from server.\n");
     exit(0);
 }
-/* ============================================================ */
 
 int main()
 {
@@ -162,7 +160,6 @@ int main()
         print_certificate_info(ssl);
     }
 
-    /* ================= CHAT PART ================= */
     pthread_t recv_thread;
     pthread_create(&recv_thread, NULL, receive_handler, ssl);
 
@@ -173,7 +170,6 @@ int main()
         fgets(msg, sizeof(msg), stdin);
         SSL_write(ssl, msg, strlen(msg));
     }
-    /* ============================================= */
 
     SSL_shutdown(ssl);
     SSL_free(ssl);
