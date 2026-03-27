@@ -103,7 +103,6 @@ int create_socket(int port)
     return s;
 }
 
-/* ===================== NEW PART: CHAT HANDLER ===================== */
 void *client_handler(void *arg)
 {
     SSL *ssl = (SSL *)arg;
@@ -111,7 +110,6 @@ void *client_handler(void *arg)
 
     if (fork() == 0)
     {
-        // RECEIVE FROM CLIENT
         while (1)
         {
             int bytes = SSL_read(ssl, buffer, sizeof(buffer) - 1);
@@ -129,7 +127,6 @@ void *client_handler(void *arg)
     }
     else
     {
-        // SEND TO CLIENT
         char msg[BUFFER_SIZE];
         while (1)
         {
@@ -141,7 +138,6 @@ void *client_handler(void *arg)
 
     return NULL;
 }
-/* ================================================================ */
 
 void run_server(const char *certfile,
                 const char *keyfile,
